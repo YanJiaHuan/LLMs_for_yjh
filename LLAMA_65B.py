@@ -158,10 +158,11 @@ def preprocess_function(example, tokenizer):
 db_id_train = []
 query_train = []
 question_train = []
-for sample in train_data.iterrows():
+for index, sample in train_data.iterrows():
     db_id_train.append(sample['db_id'])
     query_train.append(sample['query'])
     question_train.append(sample['question'])
+
 
 dataset_train = Dataset.from_dict({
     "db_id": db_id_train,
@@ -171,7 +172,7 @@ dataset_train = Dataset.from_dict({
 db_id_eval = []
 query_eval = []
 question_eval = []
-for sample in eval_data.iterrows():
+for index,sample in eval_data.iterrows():
     db_id_eval.append(sample['db_id'])
     query_eval.append(sample['query'])
     question_eval.append(sample['question'])
