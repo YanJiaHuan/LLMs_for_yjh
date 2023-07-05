@@ -147,8 +147,8 @@ def preprocess_function(example, tokenizer):
         question_after = question + '\n' + schema
         questions.append(question_after)
     queries = example['query']
-    input_tokenized = tokenizer(questions, return_tensors="pt", max_length=2048, truncation=True, padding="max_length")
-    output_tokenized = tokenizer(queries, return_tensors="pt", max_length=2048, truncation=True, padding="max_length")
+    input_tokenized = tokenizer(questions, return_tensors="pt", max_length=512, truncation=True, padding="max_length",add_special_tokens=False)
+    output_tokenized = tokenizer(queries, return_tensors="pt", max_length=512, truncation=True, padding="max_length",add_special_tokens=False)
 
     return {
         "input_ids": input_tokenized["input_ids"],
@@ -250,6 +250,7 @@ trainer = transformers.Seq2SeqTrainer(
         optim="paged_adamw_8bit",
         predict_with_generate=True,
         generation_num_beams=4,
+        generation_max_length=512,
         include_inputs_for_metrics=True,
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
