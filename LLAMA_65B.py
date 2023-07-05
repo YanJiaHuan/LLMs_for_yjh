@@ -1,6 +1,17 @@
 #### LLAMA-65B ####
 import torch
+import nltk
+import os
+import json
+import transformers
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from datasets.arrow_dataset import Dataset
+import pandas as pd
+from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model
+import sys
+sys.path.append('./Evaluation_metric/spider/')
+from Evaluation_self import evaluate,evaluate_test
+import re
 
 nf4_config = BitsAndBytesConfig(
    load_in_4bit=True,
@@ -14,7 +25,6 @@ model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=nf4_c
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 
 #### PEFT ####
-from peft import prepare_model_for_kbit_training
 
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
@@ -33,7 +43,6 @@ def print_trainable_parameters(model):
         f"trainable params: {trainable_params} || all params: {all_param} || trainable%: {100 * trainable_params / all_param}"
     )
 
-from peft import LoraConfig, get_peft_model
 
 config = LoraConfig(
     r=8,  # 理论上调的越高越好，8是一个分界线
@@ -49,20 +58,175 @@ print_trainable_parameters(model)
 
 #### load data ####
 from datasets import load_dataset
+path_to_Spider = "./Data/spider"
+Output_path = "./Outputs/Spider"
+DATASET_SCHEMA = path_to_Spider + "/tables.json"
+DATASET_TRAIN = path_to_Spider + "/train_spider.json"
+DATASET_DEV = path_to_Spider + "/dev.json"
+OUTPUT_FILE_1 = Output_path + "/predicted_sql.txt"
+OUTPUT_FILE_2 = Output_path + "/gold_sql.txt"
+DATABASE_PATH = path_to_Spider + "/database"
 
-data = load_dataset("Abirate/english_quotes")
-data = data.map(lambda samples: tokenizer(samples["quote"]), batched=True)
+def load_data(DATASET):
+    return pd.read_json(DATASET)
+
+#### Preprocess ####
+def find_foreign_keys_MYSQL_like(db_name):
+  df = spider_foreign[spider_foreign['Database name'] == db_name]
+  output = "["
+  for index, row in df.iterrows():
+    output += row['First Table Name'] + '.' + row['First Table Foreign Key'] + " = " + row['Second Table Name'] + '.' + row['Second Table Foreign Key'] + ','
+  output= output[:-1] + "]"
+  return output
+def find_fields_MYSQL_like(db_name):
+  df = spider_schema[spider_schema['Database name'] == db_name]
+  df = df.groupby(' Table Name')
+  output = ""
+  for name, group in df:
+    output += "Table " +name+ ', columns = ['
+    for index, row in group.iterrows():
+      output += row[" Field Name"]+','
+    output = output[:-1]
+    output += "]\n"
+  return output
+def find_primary_keys_MYSQL_like(db_name):
+  df = spider_primary[spider_primary['Database name'] == db_name]
+  output = "["
+  for index, row in df.iterrows():
+    output += row['Table Name'] + '.' + row['Primary Key'] +','
+  output = output[:-1]
+  output += "]\n"
+  return output
+
+def creatiing_schema(DATASET_JSON):
+    schema_df = pd.read_json(DATASET_JSON)
+    schema_df = schema_df.drop(['column_names','table_names'], axis=1)
+    schema = []
+    f_keys = []
+    p_keys = []
+    for index, row in schema_df.iterrows():
+        tables = row['table_names_original']
+        col_names = row['column_names_original']
+        col_types = row['column_types']
+        foreign_keys = row['foreign_keys']
+        primary_keys = row['primary_keys']
+        for col, col_type in zip(col_names, col_types):
+            index, col_name = col
+            if index == -1:
+                for table in tables:
+                    schema.append([row['db_id'], table, '*', 'text'])
+            else:
+                schema.append([row['db_id'], tables[index], col_name, col_type])
+        for primary_key in primary_keys:
+            index, column = col_names[primary_key]
+            p_keys.append([row['db_id'], tables[index], column])
+        for foreign_key in foreign_keys:
+            first, second = foreign_key
+            first_index, first_column = col_names[first]
+            second_index, second_column = col_names[second]
+            f_keys.append([row['db_id'], tables[first_index], tables[second_index], first_column, second_column])
+    spider_schema = pd.DataFrame(schema, columns=['Database name', ' Table Name', ' Field Name', ' Type'])
+    spider_primary = pd.DataFrame(p_keys, columns=['Database name', 'Table Name', 'Primary Key'])
+    spider_foreign = pd.DataFrame(f_keys,
+                        columns=['Database name', 'First Table Name', 'Second Table Name', 'First Table Foreign Key',
+                                 'Second Table Foreign Key'])
+    return spider_schema,spider_primary,spider_foreign
+
+print('Creating Schema linking...\n')
+spider_schema,spider_primary,spider_foreign = creatiing_schema(DATASET_SCHEMA)
+train_data = load_data(DATASET_TRAIN)
+eval_data = load_data(DATASET_DEV)
+
+def preprocess_function(example, tokenizer):
+    questions = []
+    for question,db_id in zip(example['question'],example['db_id']):
+        schema = find_fields_MYSQL_like(db_id) + '\n' + "foreign key:" + find_foreign_keys_MYSQL_like(
+        db_id) + '\n' + "primary key:" + find_primary_keys_MYSQL_like(db_id)
+        question_after = question + '\n' + schema
+        questions.append(question_after)
+    queries = example['query']
+    input_tokenized = tokenizer(questions, return_tensors="pt", max_length=512, truncation=True, padding="max_length")
+    output_tokenized = tokenizer(queries, return_tensors="pt", max_length=512, truncation=True, padding="max_length")
+
+    return {
+        "input_ids": input_tokenized["input_ids"],
+        "attention_mask": input_tokenized["attention_mask"],
+        "labels": output_tokenized["input_ids"],
+        "db_id": example["db_id"],
+        "gold_query": example["query"]
+    }
+
+db_id_train = [entry["db_id"] for entry in train_data]
+query_train = [entry["query"] for entry in train_data]
+question_train = [entry["question"] for entry in train_data]
+
+
+dataset_train = Dataset.from_dict({
+    "db_id": db_id_train,
+    "query": query_train,
+    "question": question_train,
+})
+db_id_eval = [entry["db_id"] for entry in eval_data]
+query_eval = [entry["query"] for entry in eval_data]
+question_eval = [entry["question"] for entry in eval_data]
+
+dataset_eval = Dataset.from_dict({
+    "db_id": db_id_eval,
+    "query": query_eval,
+    "question": question_eval,
+})
+
+
+# Shuffle and select a subset of the data, if needed
+dataset_train = dataset_train.shuffle(seed=42)
+dataset_eval = dataset_eval
+
+# Preprocess the data
+dataset = dataset_train.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+eval_dataset = dataset_eval.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+
+#### Custom metric ####
+def compute_metric(eval_pred):
+    preds = eval_pred.predictions
+    labels = eval_pred.label_ids
+    db_ids = eval_pred.inputs
+    decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
+    decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+    decoded_inputs = tokenizer.batch_decode(db_ids, skip_special_tokens=True)
+    db_id = []
+    for question in decoded_inputs:
+        result = re.search(r'\|(.+?)\|', question)
+        db_id.append(result.group(1).strip())
+    genetrated_queries = ["\n".join(nltk.sent_tokenize(pred.strip())) for pred in decoded_preds]  ###########
+    gold_queries_and_db_ids = []
+    with open("./Evaluation_file/gold_example_1e4__checkpoint-10000.txt", 'r') as file:
+        for line in file:
+            # Split the line by the tab character '\t'
+            query, db_id = line.strip().split('\t')
+
+            # Append the query and db_id as a tuple to the list
+            gold_queries_and_db_ids.append((query, db_id))
+    db_dir = './database'
+    etype = 'all'
+    table = './tables.json'
+    # print("now you see")
+    score = evaluate(gold_queries_and_db_ids, genetrated_queries, db_dir, etype, table)
+    print(f"Execution Accuracy: {score}")
+    return {"exec": score}  # 必须返回字典
+
+
 
 #### train ####
-import transformers
-
 # needed for gpt-neo-x tokenizer
 tokenizer.pad_token = tokenizer.eos_token
 
 trainer = transformers.Trainer(
     model=model,
-    train_dataset=data["train"],
+    train_dataset=dataset,
+    eval_dataset=eval_dataset,
+    compute_metrics=compute_metric,
     args=transformers.TrainingArguments(
+        output_dir="./Checkpoints/LLAMA_65B/Spider",
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         warmup_steps=2,
@@ -70,7 +234,6 @@ trainer = transformers.Trainer(
         learning_rate=2e-4,
         fp16=True,
         logging_steps=1,
-        output_dir="outputs",
         optim="paged_adamw_8bit"
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
