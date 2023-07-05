@@ -1,6 +1,12 @@
 # Introduction
 This a self-built repo to reproduce the fine-tuning of some Large Language Models (LLM) based on certain training frameworks like DeepSpeed, bitsandbytes, and QLora.
 
+## Hardware
+NVIDIA-SMI 510.108.03   
+Driver Version: 510.108.03   
+CUDA Version: 11.6  
+8 * NVIDIA RTX A6000 (50GB)
+
 ## Model Reproduction
 |                                  Model Name                                   | Parameters | Trainable Parameters Percentage | Methods | Batch Size (train/evaluate) | Training Time | Inference Time |
 |:-----------------------------------------------------------------------------:|:----------:|:-------------------------------:|:-------:|:---------------------------:|:-------------:|:--------------:|
