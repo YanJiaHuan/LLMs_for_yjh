@@ -20,3 +20,13 @@ pip install git+https://github.com/huggingface/accelerate.git
 pip install datasets
 pip install deepspeed
 ```
+## Launch
+### T5_3B.py
+```bash
+deepspeed --include localhost:0,1,2,3,4,5,6,7,8 finaltest_trainer_eval.py```
+```
+
+### LLAMA_65B.py
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
+```
