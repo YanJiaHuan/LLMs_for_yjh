@@ -8,12 +8,12 @@ CUDA Version: 11.6
 8 * NVIDIA RTX A6000 (50GB)
 
 ## Model Reproduction
-|                        Model Name                        | Parameters | Trainable Parameters Percentage |       Methods       | Batch Size (train/evaluate) | Training Time | Inference Time |
-|:--------------------------------------------------------:|:----------:|:-------------------------------:|:-------------------:|:---------------------------:|:-------------:|:--------------:|
-|          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               |          -          |             1/4             |   1 (base)    |    1 (base)    |
-|          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               | DeepSpeed ( zero-2) |             2/4             |  0.8 (base)   |    1 (base)    |
-| [llama-65B](https://huggingface.co/huggyllama/llama-65b) |    65B     |             0.0639%             |        QLora        |            4/24             |       -       |      6.1       |
-|                            -                             |     -      |                -                |          -          |              -              |       -       |       -        |
+|                        Model Name                        | Parameters | Trainable Parameters Percentage |       Methods        | Batch Size (train/evaluate) | Training Time | Inference Time |
+|:--------------------------------------------------------:|:----------:|:-------------------------------:|:--------------------:|:---------------------------:|:-------------:|:--------------:|
+|          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               |          -           |             1/4             |   1 (base)    |    1 (base)    |
+|          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               | DeepSpeed  ( zero-2) |             2/4             |  0.8 (base)   |    1 (base)    |
+| [llama-65B](https://huggingface.co/huggyllama/llama-65b) |    65B     |             0.0639%             |        QLora         |            4/24             |       -       |      6.1       |
+|                            -                             |     -      |                -                |          -           |              -              |       -       |       -        |
 
 ## Qlora
 This is a method to depend on 4bit training to decrease the memory cost of LLMs (derived from int8). By introducing more information loss (which might cause performation loss) and time cost, we saved more memory
