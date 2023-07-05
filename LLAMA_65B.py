@@ -155,20 +155,26 @@ def preprocess_function(example, tokenizer):
         "db_id": example["db_id"],
         "gold_query": example["query"]
     }
-
-db_id_train = [entry["db_id"] for entry in train_data]
-query_train = [entry["query"] for entry in train_data]
-question_train = [entry["question"] for entry in train_data]
-
+db_id_train = []
+query_train = []
+question_train = []
+for sample in train_data.iterrows():
+    db_id_train.append(sample['db_id'])
+    query_train.append(sample['query'])
+    question_train.append(sample['question'])
 
 dataset_train = Dataset.from_dict({
     "db_id": db_id_train,
     "query": query_train,
     "question": question_train,
 })
-db_id_eval = [entry["db_id"] for entry in eval_data]
-query_eval = [entry["query"] for entry in eval_data]
-question_eval = [entry["question"] for entry in eval_data]
+db_id_eval = []
+query_eval = []
+question_eval = []
+for sample in eval_data.iterrows():
+    db_id_eval.append(sample['db_id'])
+    query_eval.append(sample['query'])
+    question_eval.append(sample['question'])
 
 dataset_eval = Dataset.from_dict({
     "db_id": db_id_eval,
