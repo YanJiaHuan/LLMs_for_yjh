@@ -238,6 +238,7 @@ trainer = transformers.Seq2SeqTrainer(
         output_dir="./Checkpoints/LLAMA_65B/Spider",
         num_train_epochs=5,
         per_device_train_batch_size=1,
+        per_device_eval_batch_size=24,
         gradient_accumulation_steps=4,
         warmup_steps=2,
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
@@ -250,7 +251,7 @@ trainer = transformers.Seq2SeqTrainer(
         optim="paged_adamw_8bit",
         predict_with_generate=True,
         generation_num_beams=4,
-        generation_max_length=512,
+        generation_max_length=513,
         include_inputs_for_metrics=True,
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
@@ -258,4 +259,4 @@ trainer = transformers.Seq2SeqTrainer(
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 trainer.train()
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3 python3 LLAMA_65B.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
