@@ -11,7 +11,7 @@ CUDA Version: 11.6
 |                        Model Name                        | Parameters | Trainable Parameters Percentage |      Methods       | Batch Size (train/evaluate) | Training Time | Inference Time |
 |:--------------------------------------------------------:|:----------:|:-------------------------------:|:------------------:|:---------------------------:|:-------------:|:--------------:|
 |          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               |         -          |             1/4             |   1 (base)    |    1 (base)    |
-|          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               | DeepSpeed<br/>( zero-2) |             2/4             |  0.8 (base)   |    1 (base)    |
+|          [T5-3B](https://huggingface.co/t5-3b)           |     3B     |              100%               | DeepSpeed (Zero-2) |             2/4             |  0.8 (base)   |    1 (base)    |
 | [llama-65B](https://huggingface.co/huggyllama/llama-65b) |    65B     |             0.0639%             |       QLora        |            4/24             |       -       |      6.1       |
 |                            -                             |     -      |                -                |         -          |              -              |       -       |       -        |
 
