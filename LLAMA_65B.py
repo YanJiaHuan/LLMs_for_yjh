@@ -23,7 +23,9 @@ model_id = "huggyllama/llama-65b"
 
 model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
 tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer.pad_token = tokenizer.eos_token
 
+# print(tokenizer.model_max_length)
 #### PEFT ####
 
 model.gradient_checkpointing_enable()
@@ -145,8 +147,8 @@ def preprocess_function(example, tokenizer):
         question_after = question + '\n' + schema
         questions.append(question_after)
     queries = example['query']
-    input_tokenized = tokenizer(questions, return_tensors="pt", max_length=512, truncation=True, padding="max_length")
-    output_tokenized = tokenizer(queries, return_tensors="pt", max_length=512, truncation=True, padding="max_length")
+    input_tokenized = tokenizer(questions, return_tensors="pt", max_length=2048, truncation=True, padding="max_length")
+    output_tokenized = tokenizer(queries, return_tensors="pt", max_length=2048, truncation=True, padding="max_length")
 
     return {
         "input_ids": input_tokenized["input_ids"],
@@ -227,21 +229,28 @@ def compute_metric(eval_pred):
 # needed for gpt-neo-x tokenizer
 tokenizer.pad_token = tokenizer.eos_token
 
-trainer = transformers.Trainer(
+trainer = transformers.Seq2SeqTrainer(
     model=model,
     train_dataset=dataset,
     eval_dataset=eval_dataset,
     compute_metrics=compute_metric,
-    args=transformers.TrainingArguments(
+    args=transformers.Seq2SeqTrainingArguments(
         output_dir="./Checkpoints/LLAMA_65B/Spider",
+        num_train_epochs=5,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         warmup_steps=2,
-        max_steps=10,
-        learning_rate=2e-4,
+        evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
+        save_strategy="steps",
+        eval_steps=2,
+        save_steps=4000,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
+        learning_rate=8e-5,
         fp16=True,
-        logging_steps=1,
-        optim="paged_adamw_8bit"
+        logging_steps=500,
+        optim="paged_adamw_8bit",
+        predict_with_generate=True,
+        generation_num_beams=4,
+        include_inputs_for_metrics=True,
     ),
     data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
 )
