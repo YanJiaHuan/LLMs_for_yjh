@@ -36,9 +36,9 @@ def print_trainable_parameters(model):
 from peft import LoraConfig, get_peft_model
 
 config = LoraConfig(
-    r=8,
-    lora_alpha=32,
-    target_modules=["q_proj", "v_proj"],
+    r=8,  # 理论上调的越高越好，8是一个分界线
+    lora_alpha=32, # 这个参数类似lr
+    target_modules=["q_proj", "v_proj"], # 需要影响的层
     lora_dropout=0.05,
     bias="none",
     task_type="CAUSAL_LM"
