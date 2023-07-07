@@ -34,7 +34,7 @@ tokenizer.add_special_tokens({
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 # print(tokenizer.model_max_length)
 #### PEFT ####
-
+model.resize_token_embeddings(len(tokenizer))
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
 
@@ -75,7 +75,7 @@ DATASET_DEV = path_to_Spider + "/dev.json"
 OUTPUT_FILE_1 = Output_path + "/predicted_sql.txt"
 OUTPUT_FILE_2 = Output_path + "/gold_sql.txt"
 DATABASE_PATH = path_to_Spider + "/database"
-
+gold_file = path_to_Spider + "/gold_eval.txt"
 def load_data(DATASET):
     return pd.read_json(DATASET)
 
@@ -149,7 +149,7 @@ eval_data = load_data(DATASET_DEV)
 def preprocess_function(example, tokenizer):
     questions = []
     for question,db_id in zip(example['question'],example['db_id']):
-        schema = find_fields_MYSQL_like(db_id) + '\n' + "foreign key:" + find_foreign_keys_MYSQL_like(
+        schema = "db_id:" + db_id +'\n' + find_fields_MYSQL_like(db_id) + '\n' + "foreign key:" + find_foreign_keys_MYSQL_like(
         db_id) + '\n' + "primary key:" + find_primary_keys_MYSQL_like(db_id)
         question_after = question + '\n' + schema
         questions.append(question_after)
@@ -168,6 +168,8 @@ db_id_train = []
 query_train = []
 question_train = []
 for index, sample in train_data.iterrows():
+    if index == 8:
+        break
     db_id_train.append(sample['db_id'])
     query_train.append(sample['query'])
     question_train.append(sample['question'])
@@ -182,6 +184,8 @@ db_id_eval = []
 query_eval = []
 question_eval = []
 for index,sample in eval_data.iterrows():
+    if index == 8:
+        break
     db_id_eval.append(sample['db_id'])
     query_eval.append(sample['query'])
     question_eval.append(sample['question'])
@@ -205,26 +209,26 @@ def compute_metric(eval_pred):
     predictions = eval_pred.predictions
     preds = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
     labels = eval_pred.label_ids
-    db_ids = eval_pred.inputs
+    inputs = eval_pred.inputs
     decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True,clean_up_tokenization_spaces=False)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True,clean_up_tokenization_spaces=False)
-    decoded_inputs = tokenizer.batch_decode(db_ids, skip_special_tokens=True,clean_up_tokenization_spaces=False)
+    decoded_inputs = tokenizer.batch_decode(inputs, skip_special_tokens=True,clean_up_tokenization_spaces=False)
     db_id = []
     for question in decoded_inputs:
-        result = re.search(r'\|(.+?)\|', question)
+        result = re.search(r'db_id:(.+?)\n', question)
         db_id.append(result.group(1).strip())
     genetrated_queries = ["\n".join(nltk.sent_tokenize(pred.strip())) for pred in decoded_preds]  ###########
     gold_queries_and_db_ids = []
-    with open("./Evaluation_file/gold_example_1e4__checkpoint-10000.txt", 'r') as file:
+    with open(gold_file, 'r') as file:
         for line in file:
             # Split the line by the tab character '\t'
             query, db_id = line.strip().split('\t')
 
             # Append the query and db_id as a tuple to the list
             gold_queries_and_db_ids.append((query, db_id))
-    db_dir = './database'
+    db_dir = DATABASE_PATH
     etype = 'all'
-    table = './tables.json'
+    table = DATASET_SCHEMA
     # print("now you see")
     score = evaluate(gold_queries_and_db_ids, genetrated_queries, db_dir, etype, table)
     print(f"Execution Accuracy: {score}")
@@ -239,13 +243,13 @@ tokenizer.pad_token = tokenizer.eos_token
 trainer = transformers.Seq2SeqTrainer(
     model=model,
     train_dataset=dataset,
-    eval_dataset=eval_dataset[:8],
+    eval_dataset=eval_dataset,
     compute_metrics=compute_metric,
     args=transformers.Seq2SeqTrainingArguments(
         output_dir="./Checkpoints/LLAMA_65B/Spider",
         num_train_epochs=5,
         per_device_train_batch_size=1,
-        per_device_eval_batch_size=24,
+        per_device_eval_batch_size=1,
         gradient_accumulation_steps=4,
         warmup_steps=2,
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
