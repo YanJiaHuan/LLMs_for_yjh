@@ -7,6 +7,7 @@ import transformers
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from datasets.arrow_dataset import Dataset
 import pandas as pd
+import numpy as np
 from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model
 import sys
 sys.path.append('./Evaluation_metric/spider/')
@@ -23,8 +24,14 @@ model_id = "huggyllama/llama-65b"
 
 model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
 tokenizer = AutoTokenizer.from_pretrained(model_id)
-tokenizer.pad_token = tokenizer.eos_token
-
+tokenizer.add_special_tokens({
+                "eos_token": tokenizer.convert_ids_to_tokens(model.config.eos_token_id),
+                "bos_token": tokenizer.convert_ids_to_tokens(model.config.bos_token_id),
+                "unk_token": tokenizer.convert_ids_to_tokens(
+                    model.config.pad_token_id if model.config.pad_token_id != -1 else tokenizer.pad_token_id
+                ),
+        })
+tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 # print(tokenizer.model_max_length)
 #### PEFT ####
 
@@ -193,15 +200,15 @@ dataset_eval = dataset_eval
 # Preprocess the data
 dataset = dataset_train.map(lambda e: preprocess_function(e, tokenizer), batched=True)
 eval_dataset = dataset_eval.map(lambda e: preprocess_function(e, tokenizer), batched=True)
-
 #### Custom metric ####
 def compute_metric(eval_pred):
-    preds = eval_pred.predictions
+    predictions = eval_pred.predictions
+    preds = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
     labels = eval_pred.label_ids
     db_ids = eval_pred.inputs
-    decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-    decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-    decoded_inputs = tokenizer.batch_decode(db_ids, skip_special_tokens=True)
+    decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True,clean_up_tokenization_spaces=False)
+    decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True,clean_up_tokenization_spaces=False)
+    decoded_inputs = tokenizer.batch_decode(db_ids, skip_special_tokens=True,clean_up_tokenization_spaces=False)
     db_id = []
     for question in decoded_inputs:
         result = re.search(r'\|(.+?)\|', question)
@@ -232,7 +239,7 @@ tokenizer.pad_token = tokenizer.eos_token
 trainer = transformers.Seq2SeqTrainer(
     model=model,
     train_dataset=dataset,
-    eval_dataset=eval_dataset,
+    eval_dataset=eval_dataset[:8],
     compute_metrics=compute_metric,
     args=transformers.Seq2SeqTrainingArguments(
         output_dir="./Checkpoints/LLAMA_65B/Spider",
@@ -254,7 +261,6 @@ trainer = transformers.Seq2SeqTrainer(
         generation_max_length=513,
         include_inputs_for_metrics=True,
     ),
-    data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
 )
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 trainer.train()
