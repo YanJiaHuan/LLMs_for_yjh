@@ -340,6 +340,6 @@ def make_prediction(input_text):
 
 # Make a prediction using the model
 print(make_prediction(test_text))
-
+########
 
 # CUDA_VISIBLE_DEVICES=4,5,6,7 python3 LLAMA_65B.py
