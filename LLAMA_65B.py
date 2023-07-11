@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from datasets.arrow_dataset import Dataset
 import pandas as pd
 import numpy as np
-from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model
+from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model,PeftModel
 import sys
 sys.path.append('./Evaluation_metric/spider/')
 from Evaluation_self import evaluate,evaluate_test
@@ -62,8 +62,8 @@ config = LoraConfig(
     task_type="CAUSAL_LM"
 )
 
-model = get_peft_model(model, config)
-print_trainable_parameters(model)
+# model = get_peft_model(model, config)
+# print_trainable_parameters(model)
 
 #### load data ####
 from datasets import load_dataset
@@ -168,8 +168,8 @@ db_id_train = []
 query_train = []
 question_train = []
 for index, sample in train_data.iterrows():
-    if index == 8:
-        break
+    # if index == 8:
+    #     break
     db_id_train.append(sample['db_id'])
     query_train.append(sample['query'])
     question_train.append(sample['question'])
@@ -184,8 +184,8 @@ db_id_eval = []
 query_eval = []
 question_eval = []
 for index,sample in eval_data.iterrows():
-    if index == 8:
-        break
+    # if index == 8:
+    #     break
     db_id_eval.append(sample['db_id'])
     query_eval.append(sample['query'])
     question_eval.append(sample['question'])
@@ -248,14 +248,14 @@ trainer = transformers.Seq2SeqTrainer(
     args=transformers.Seq2SeqTrainingArguments(
         output_dir="./Checkpoints/LLAMA_65B/Spider",
         num_train_epochs=5,
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=1,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=16,
         gradient_accumulation_steps=4,
         warmup_steps=2,
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
-        eval_steps=2,
-        save_steps=4000,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
+        eval_steps=80,
+        save_steps=200,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
         learning_rate=8e-5,
         fp16=True,
         logging_steps=500,
@@ -267,6 +267,79 @@ trainer = transformers.Seq2SeqTrainer(
     ),
 )
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
-trainer.train()
+# trainer.train()
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
+
+######### Inference Test #########
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Load the trained model and tokenizer
+model_name = "huggyllama/llama-65b"
+adapter_name = "./Checkpoints/LLAMA_65B/Spider/checkpoint-200"
+reload_path = "./Checkpoints/LLAMA_65B/Spider/reload"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.add_special_tokens({
+                "eos_token": tokenizer.convert_ids_to_tokens(model.config.eos_token_id),
+                "bos_token": tokenizer.convert_ids_to_tokens(model.config.bos_token_id),
+                "unk_token": tokenizer.convert_ids_to_tokens(
+                    model.config.pad_token_id if model.config.pad_token_id != -1 else tokenizer.pad_token_id
+                ),
+        })
+tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
+
+def apply_lora(base_model_path, target_model_path, lora_path):
+    print(f"Loading the base model from {base_model_path}")
+    base = AutoModelForCausalLM.from_pretrained(
+        base_model_path, torch_dtype=torch.float16, low_cpu_mem_usage=True
+    )
+    base_tokenizer = AutoTokenizer.from_pretrained(base_model_path, use_fast=False)
+
+    print(f"Loading the LoRA adapter from {lora_path}")
+
+    lora_model = PeftModel.from_pretrained(
+        base,
+        lora_path,
+        # torch_dtype=torch.float16
+    )
+
+    print("Applying the LoRA")
+    model = lora_model.merge_and_unload()
+
+    print(f"Saving the target model to {target_model_path}")
+    model.save_pretrained(target_model_path)
+    base_tokenizer.save_pretrained(target_model_path)
+
+
+# print('reloading...')
+# apply_lora(model_name, reload_path, adapter_name)
+
+
+model = AutoModelForCausalLM.from_pretrained(reload_path)
+model.resize_token_embeddings(len(tokenizer))
+# Load a single example from the Spider dataset
+test_example = eval_data.loc[0]  # replace 0 with the index of the desired test example
+test_question = test_example['question']
+test_db_id = test_example['db_id']
+
+# Construct the test text with question and schema
+test_text = test_question + '\n' + "db_id:" + test_db_id +'\n' + find_fields_MYSQL_like(test_db_id) + '\n' + "foreign key:" + find_foreign_keys_MYSQL_like(test_db_id) + '\n' + "primary key:" + find_primary_keys_MYSQL_like(test_db_id)
+
+# Define a method for making predictions
+def make_prediction(input_text):
+    # Encode the text
+    encoded_input = tokenizer(input_text, return_tensors='pt', max_length=512, truncation=True, padding="max_length",add_special_tokens=False)
+
+    # Generate the prediction
+    output = model.generate(encoded_input["input_ids"], max_new_tokens=514, num_beams=4)
+
+    # Decode the output
+    decoded_output = tokenizer.decode(output[0], skip_special_tokens=True)
+
+    return decoded_output
+
+# Make a prediction using the model
+print(make_prediction(test_text))
+
+
+# CUDA_VISIBLE_DEVICES=4,5,6,7 python3 LLAMA_65B.py
