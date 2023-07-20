@@ -4,7 +4,6 @@ import torch
 from peft import PeftModel
 
 
-
 # Load the trained model and tokenizer
 model_name = "huggyllama/llama-65b"
 adapter_name = "./Checkpoints/LLAMA_65B/Spider/checkpoint-200"
@@ -21,6 +20,10 @@ tokenizer.add_special_tokens({
         })
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
+print(tokenizer.special_tokens_map)
+print(tokenizer.convert_tokens_to_ids(tokenizer.special_tokens_map.values()))
+
+model.resize_token_embeddings(len(tokenizer))
 
 def apply_lora(base_model_path, target_model_path, lora_path):
     print(f"Loading the base model from {base_model_path}")
@@ -61,9 +64,17 @@ def apply_lora(base_model_path, target_model_path, lora_path):
 
 test_text = "What is the name of the person who is the author of the book with the title 'The Shining'?"
 # Define a method for making predictions
+
+device_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+model = torch.nn.DataParallel(model, device_ids=device_ids).cuda()
+
 def make_prediction(input_text):
     # Encode the text
     encoded_input = tokenizer(input_text, return_tensors='pt', max_length=512, truncation=True, padding="max_length",add_special_tokens=False)
+
+    print("Max input value:", torch.max(encoded_input["input_ids"]))
+    print(encoded_input["input_ids"])
+    print("Embedding size:", model.get_input_embeddings().weight.size(0))
 
     # Generate the prediction
     output = model.generate(encoded_input["input_ids"], max_new_tokens=514, num_beams=4)
