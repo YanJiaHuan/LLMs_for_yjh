@@ -316,6 +316,7 @@ def apply_lora(base_model_path, target_model_path, lora_path):
 
 
 model = AutoModelForCausalLM.from_pretrained(reload_path)
+model.tie_weights()
 model.resize_token_embeddings(len(tokenizer))
 # Load a single example from the Spider dataset
 test_example = eval_data.loc[0]  # replace 0 with the index of the desired test example
@@ -342,4 +343,4 @@ def make_prediction(input_text):
 print(make_prediction(test_text))
 #########@
 
-# CUDA_VISIBLE_DEVICES=4,5,6,7 python3 LLAMA_65B.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
