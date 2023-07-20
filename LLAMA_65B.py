@@ -8,7 +8,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from datasets.arrow_dataset import Dataset
 import pandas as pd
 import numpy as np
-from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model
+from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model,PeftModel
 import sys
 sys.path.append('./Evaluation_metric/spider/')
 from Evaluation_self import evaluate,evaluate_test
@@ -32,8 +32,8 @@ tokenizer.add_special_tokens({
                 ),
         })
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-# print(tokenizer.model_max_length)
-#### PEFT ####
+print(tokenizer.model_max_length)
+### PEFT ####
 model.resize_token_embeddings(len(tokenizer))
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
@@ -62,8 +62,8 @@ config = LoraConfig(
     task_type="CAUSAL_LM"
 )
 
-model = get_peft_model(model, config)
-print_trainable_parameters(model)
+# model = get_peft_model(model, config)
+# print_trainable_parameters(model)
 
 #### load data ####
 from datasets import load_dataset
@@ -168,8 +168,8 @@ db_id_train = []
 query_train = []
 question_train = []
 for index, sample in train_data.iterrows():
-    if index == 8:
-        break
+    # if index == 8:
+    #     break
     db_id_train.append(sample['db_id'])
     query_train.append(sample['query'])
     question_train.append(sample['question'])
@@ -184,8 +184,8 @@ db_id_eval = []
 query_eval = []
 question_eval = []
 for index,sample in eval_data.iterrows():
-    if index == 8:
-        break
+    # if index == 8:
+    #     break
     db_id_eval.append(sample['db_id'])
     query_eval.append(sample['query'])
     question_eval.append(sample['question'])
@@ -248,14 +248,14 @@ trainer = transformers.Seq2SeqTrainer(
     args=transformers.Seq2SeqTrainingArguments(
         output_dir="./Checkpoints/LLAMA_65B/Spider",
         num_train_epochs=5,
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=1,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=16,
         gradient_accumulation_steps=4,
         warmup_steps=2,
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
-        eval_steps=2,
-        save_steps=4000,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
+        eval_steps=80,
+        save_steps=200,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
         learning_rate=8e-5,
         fp16=True,
         logging_steps=500,
@@ -268,5 +268,9 @@ trainer = transformers.Seq2SeqTrainer(
 )
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 trainer.train()
+
+
+
+
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
