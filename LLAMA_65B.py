@@ -194,6 +194,7 @@ spider_schema,spider_primary,spider_foreign = creatiing_schema(DATASET_SCHEMA)
 train_data = load_data(DATASET_TRAIN)
 eval_data = load_data(DATASET_DEV)
 
+test_questions = []
 def preprocess_function(example, tokenizer):
     questions = []
     for question,db_id in zip(example['question'],example['db_id']):
@@ -201,6 +202,7 @@ def preprocess_function(example, tokenizer):
         db_id) + '\n' + "primary key:" + find_primary_keys_MYSQL_like(db_id)
         question_after = question + '\n' + schema
         questions.append(question_after)
+        test_questions.append(question_after)
     queries = example['query']
     input_tokenized = tokenizer(questions, return_tensors="pt", max_length=512, truncation=True, padding="max_length",add_special_tokens=False)
     output_tokenized = tokenizer(queries, return_tensors="pt", max_length=512, truncation=True, padding="max_length",add_special_tokens=False)
@@ -252,6 +254,8 @@ dataset_eval = dataset_eval
 # Preprocess the data
 dataset = dataset_train.map(lambda e: preprocess_function(e, tokenizer), batched=True)
 eval_dataset = dataset_eval.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+
+print(test_questions[:4])
 #### Custom metric ####
 def compute_metric(eval_pred):
     predictions = eval_pred.predictions
