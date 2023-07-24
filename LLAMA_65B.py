@@ -3,27 +3,91 @@ import torch
 import nltk
 import os
 import json
+import logging
 import transformers
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSeq2SeqLM,
+    set_seed,
+    Seq2SeqTrainer,
+    BitsAndBytesConfig,
+    LlamaTokenizer
+)
 from datasets.arrow_dataset import Dataset
 import pandas as pd
 import numpy as np
-from peft import prepare_model_for_kbit_training,LoraConfig, get_peft_model,PeftModel
+from peft import (
+    prepare_model_for_kbit_training,
+    LoraConfig,
+    get_peft_model,
+    get_peft_config,
+    PeftModelForSeq2SeqLM
+)
+from peft.tuners.lora import LoraLayer
+from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
+from typing import Optional, Dict, Sequence
 import sys
 sys.path.append('./Evaluation_metric/spider/')
 from Evaluation_self import evaluate,evaluate_test
 import re
 
+##### START #####
+torch.backends.cuda.matmul.allow_tf32 = True
+
+logger = logging.getLogger(__name__)
+
+IGNORE_INDEX = -100
+DEFAULT_PAD_TOKEN = "[PAD]"
+
+
+##### Load model #####
 nf4_config = BitsAndBytesConfig(
    load_in_4bit=True,
    bnb_4bit_quant_type="nf4",
    bnb_4bit_use_double_quant=True,
    bnb_4bit_compute_dtype=torch.bfloat16
 )
-model_id = "huggyllama/llama-65b"
 
-model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+model_id = "huggyllama/llama-65b"
+model = AutoModelForSeq2SeqLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
+
+##### Load tokenizer #####
+def smart_tokenizer_and_embedding_resize(
+        special_tokens_dict: Dict,
+        tokenizer: transformers.PreTrainedTokenizer,
+        model: transformers.PreTrainedModel,
+):
+    """Resize tokenizer and embedding.
+
+    Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
+    """
+    num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    model.resize_token_embeddings(len(tokenizer))
+
+    if num_new_tokens > 0:
+        input_embeddings_data = model.get_input_embeddings().weight.data
+        output_embeddings_data = model.get_output_embeddings().weight.data
+
+        input_embeddings_avg = input_embeddings_data[:-num_new_tokens].mean(dim=0, keepdim=True)
+        output_embeddings_avg = output_embeddings_data[:-num_new_tokens].mean(dim=0, keepdim=True)
+
+        input_embeddings_data[-num_new_tokens:] = input_embeddings_avg
+        output_embeddings_data[-num_new_tokens:] = output_embeddings_avg
+
+
+tokenizer = AutoTokenizer.from_pretrained(
+    model_id,
+    padding_side="right",
+    use_fast=False,
+    tokenizer_type='llama',
+)
+if tokenizer.pad_token is None:
+    smart_tokenizer_and_embedding_resize(
+        special_tokens_dict = dict(pad_token=DEFAULT_PAD_TOKEN),
+        tokenizer = tokenizer,
+        model = model,
+    )
+print('Add special tokens.')
 tokenizer.add_special_tokens({
                 "eos_token": tokenizer.convert_ids_to_tokens(model.config.eos_token_id),
                 "bos_token": tokenizer.convert_ids_to_tokens(model.config.bos_token_id),
@@ -31,27 +95,11 @@ tokenizer.add_special_tokens({
                     model.config.pad_token_id if model.config.pad_token_id != -1 else tokenizer.pad_token_id
                 ),
         })
-tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-print(tokenizer.model_max_length)
-### PEFT ####
+
+##### Load model as Qlora setup #####
 model.resize_token_embeddings(len(tokenizer))
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
-
-def print_trainable_parameters(model):
-    """
-    Prints the number of trainable parameters in the model.
-    """
-    trainable_params = 0
-    all_param = 0
-    for _, param in model.named_parameters():
-        all_param += param.numel()
-        if param.requires_grad:
-            trainable_params += param.numel()
-    print(
-        f"trainable params: {trainable_params} || all params: {all_param} || trainable%: {100 * trainable_params / all_param}"
-    )
-
 
 config = LoraConfig(
     r=8,  # 理论上调的越高越好，8是一个分界线
@@ -59,14 +107,13 @@ config = LoraConfig(
     target_modules=["q_proj", "v_proj"], # 需要影响的层
     lora_dropout=0.05,
     bias="none",
-    task_type="CAUSAL_LM"
+    task_type="SEQ_2_SEQ_LM"
 )
+model = get_peft_model(model,config)
+model.print_trainable_parameters()
 
-# model = get_peft_model(model, config)
-# print_trainable_parameters(model)
 
 #### load data ####
-from datasets import load_dataset
 path_to_Spider = "./Data/spider"
 Output_path = "./Outputs/Spider"
 DATASET_SCHEMA = path_to_Spider + "/tables.json"
@@ -251,12 +298,15 @@ trainer = transformers.Seq2SeqTrainer(
         per_device_train_batch_size=32,
         per_device_eval_batch_size=16,
         gradient_accumulation_steps=4,
-        warmup_steps=2,
+        gradient_checkpointing=True,
+        warmup_ratio=0.03,
+        group_by_length=True,
+        lr_scheduler_type="constant",
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
         eval_steps=80,
         save_steps=200,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
-        learning_rate=8e-5,
+        learning_rate=2e-4,
         fp16=True,
         logging_steps=500,
         optim="paged_adamw_8bit",
