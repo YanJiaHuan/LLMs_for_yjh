@@ -7,7 +7,8 @@ import logging
 import transformers
 from transformers import (
     AutoTokenizer,
-    AutoModelForSeq2SeqLM,
+    LlamaForCausalLM,
+    LlamaTokenizer,
     set_seed,
     Seq2SeqTrainer,
     BitsAndBytesConfig,
@@ -49,7 +50,7 @@ nf4_config = BitsAndBytesConfig(
 )
 
 model_id = "huggyllama/llama-65b"
-model = AutoModelForSeq2SeqLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
+model = LlamaForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
 
 ##### Load tokenizer #####
 def smart_tokenizer_and_embedding_resize(
@@ -75,7 +76,7 @@ def smart_tokenizer_and_embedding_resize(
         output_embeddings_data[-num_new_tokens:] = output_embeddings_avg
 
 
-tokenizer = AutoTokenizer.from_pretrained(
+tokenizer = LlamaTokenizer.from_pretrained(
     model_id,
     padding_side="right",
     use_fast=False,
@@ -107,9 +108,9 @@ config = LoraConfig(
     target_modules=["q_proj", "v_proj"], # 需要影响的层
     lora_dropout=0.05,
     bias="none",
-    task_type="SEQ_2_SEQ_LM"
+    task_type="CAUSAL_LM"
 )
-model = get_peft_model(model,config)
+model = get_peft_model(model, config)
 model.print_trainable_parameters()
 
 
@@ -300,7 +301,7 @@ trainer = transformers.Seq2SeqTrainer(
         gradient_accumulation_steps=4,
         gradient_checkpointing=True,
         warmup_ratio=0.03,
-        group_by_length=True,
+        group_by_length=False,
         lr_scheduler_type="constant",
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
