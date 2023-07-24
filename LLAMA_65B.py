@@ -197,10 +197,11 @@ eval_data = load_data(DATASET_DEV)
 test_questions = []
 def preprocess_function(example, tokenizer):
     questions = []
+    prompt = 'You are an expert in SQL. You are given a question and a database schema. You need to write a SQL query to answer the question.\n'
     for question,db_id in zip(example['question'],example['db_id']):
         schema = "db_id:" + db_id +'\n' + find_fields_MYSQL_like(db_id) + '\n' + "foreign key:" + find_foreign_keys_MYSQL_like(
         db_id) + '\n' + "primary key:" + find_primary_keys_MYSQL_like(db_id)
-        question_after = question + '\n' + schema
+        question_after = prompt + question + '\n' + schema + '\n' + 'SQL:'
         questions.append(question_after)
         test_questions.append(question_after)
     queries = example['query']
