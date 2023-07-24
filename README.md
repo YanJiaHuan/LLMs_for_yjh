@@ -37,3 +37,19 @@ deepspeed --include localhost:0,1,2,3,4,5,6,7,8 finaltest_trainer_eval.py
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
 ```
+### Input Examples
+```text
+What is the average enrollment of schools?
+db_id:school_player
+Table player, columns = [*,Player_ID,Player,Team,Age,Position,School_ID]
+Table school, columns = [*,School_ID,School,Location,Enrollment,Founded,Denomination,Boys_or_Girls,Day_or_Boarding,Year_Entered_Competition,School_Colors]
+Table school_details, columns = [*,School_ID,Nickname,Colors,League,Class,Division]
+Table school_performance, columns = [*,School_Id,School_Year,Class_A,Class_AA]
+
+foreign key:[school_details.School_ID = school.School_ID,school_performance.School_Id = school.School_ID,player.School_ID = school.School_ID]
+primary key:[school.School_ID,school_details.School_ID,school_performance.School_Id,player.Player_ID]
+```
+Expected Output:
+```sql
+SELECT avg(Enrollment) FROM school
+```
