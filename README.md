@@ -12,7 +12,7 @@ CUDA Version: 11.6
 |:------------------------------------------------------------:|:----------:|:-------------------------------:|:------------------:|:---------------------------:|:-------------:|:--------------:|
 |            [T5-3B](https://huggingface.co/t5-3b)             |     3B     |              100%               |         -          |             1/4             |   1 (base)    |    1 (base)    |
 |            [T5-3B](https://huggingface.co/t5-3b)             |     3B     |              100%               | DeepSpeed (Zero-2) |             2/4             |      0.8      |       1        |
-| [gpt-neox](https://huggingface.co/EleutherAI/gpt-neox-20b)   |    20B     |             0.0639%             |       QLora        |            4/24             |       4       |      6.1       |
+| [gpt-neox](https://huggingface.co/EleutherAI/gpt-neox-20b)   |    20B     |             0.0816%             |       QLora        |            4/24             |       4       |      6.1       |
 |   [llama-65B](https://huggingface.co/huggyllama/llama-65b)   |    65B     |             0.0639%             |       QLora        |            4/24             |       4       |      6.1       |
 |                              -                               |     -      |                -                |         -          |              -              |       -       |       -        |
 

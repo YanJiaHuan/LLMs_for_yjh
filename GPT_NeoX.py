@@ -23,8 +23,8 @@ from peft import (
     get_peft_config,
     PeftModelForSeq2SeqLM
 )
-from peft.tuners.lora import LoraLayer
-from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
+from accelerate import dispatch_model, infer_auto_device_map
+from accelerate.utils import get_balanced_memory
 from typing import Optional, Dict, Sequence
 import sys
 sys.path.append('./Evaluation_metric/spider/')
@@ -32,9 +32,6 @@ from Evaluation_self import evaluate,evaluate_test
 import re
 
 ##### START #####
-torch.backends.cuda.matmul.allow_tf32 = True
-
-logger = logging.getLogger(__name__)
 
 IGNORE_INDEX = -100
 DEFAULT_PAD_TOKEN = "[PAD]"
@@ -49,7 +46,7 @@ nf4_config = BitsAndBytesConfig(
 
 model_id = "EleutherAI/gpt-neox-20b"
 
-model = GPTNeoXForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map="auto")
+model = GPTNeoXForCausalLM.from_pretrained(model_id, quantization_config=nf4_config)
 
 ##### Load tokenizer #####
 tokenizer = GPTNeoXTokenizerFast.from_pretrained(model_id)
@@ -93,7 +90,20 @@ config = LoraConfig(
 model = get_peft_model(model, config)
 model.print_trainable_parameters()
 
-
+# max_memory = get_balanced_memory(
+#     model,
+#     max_memory=None,
+#     no_split_module_classes=["GPTNeoXLayer", "GPTNeoXMLP"],
+#     dtype='float16',
+#     low_zero=False,
+# )
+# device_map = infer_auto_device_map(
+#     model,
+#     max_memory=max_memory,
+#     no_split_module_classes=["GPTNeoXLayer", "GPTNeoXMLP"],
+#     dtype='float16'
+# )
+# model = dispatch_model(model, device_map=device_map)
 #### load data ####
 path_to_Spider = "./Data/spider"
 Output_path = "./Outputs/Spider"
