@@ -288,6 +288,41 @@ def compute_metric(eval_pred):
     return {"exec": score}  # 必须返回字典
 
 
+ds_config = {
+  "train_micro_batch_size_per_gpu": "auto",
+  "gradient_accumulation_steps": "auto",
+  "gradient_clipping": 1.0,
+  "zero_optimization": {
+    "stage": 2,
+    "offload_optimizer": {
+            "device": "cpu"
+    },
+    "contiguous_gradients": True,
+    "overlap_comm": True
+  },
+  "zero_allow_untested_optimizer": True,
+  "fp16": {
+    "enabled": True,
+    "loss_scale": 0,
+    "loss_scale_window": 1000,
+    "hysteresis": 2,
+    "min_loss_scale": 1
+  },
+"scheduler": {
+        "type": "WarmupLR",
+        "params": {
+            "warmup_min_lr": 0,
+            "warmup_max_lr": 2e-5,
+            "warmup_num_steps": "auto",
+            "warmup_type": "linear"
+        }
+    },
+  "activation_checkpointing": {
+    "partition_activations": True,
+    "contiguous_memory_optimization": True
+  },
+  "wall_clock_breakdown": True
+}
 
 #### train ####
 # needed for gpt-neo-x tokenizer
@@ -299,27 +334,30 @@ trainer = transformers.Seq2SeqTrainer(
     eval_dataset=eval_dataset,
     compute_metrics=compute_metric,
     args=transformers.Seq2SeqTrainingArguments(
+        logging_dir="./logs_for_LLAMA_65B" ,     # Path to directory to save logs
+        logging_strategy='steps',   # Log after every X steps
+        logging_steps=10,           # Set X to be 100
         output_dir="./Checkpoints/LLAMA_65B/Spider",
         num_train_epochs=5,
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=36,
         per_device_eval_batch_size=16,
         gradient_accumulation_steps=4,
         gradient_checkpointing=True,
         warmup_ratio=0.03,
         group_by_length=False,
-        lr_scheduler_type="constant",
+        lr_scheduler_type="cosine",
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
         eval_steps=10,
         save_steps=50,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
-        learning_rate=2e-6,
+        learning_rate=5e-5,
         fp16=True,
-        logging_steps=500,
         optim="paged_adamw_8bit",
         predict_with_generate=True,
         generation_num_beams=4,
         generation_max_length=513,
         include_inputs_for_metrics=True,
+        # deepspeed=ds_config,
     ),
 )
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
@@ -330,3 +368,11 @@ trainer.train()
 
 
 # CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
+# deepspeed --num_gpus 8 LLAMA_65B.py
+# CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  python -m torch.distributed.launch LLAMA_65B.py
+# torchrun --nproc_per_node 8 LLAMA_65B.py
+
+
+# tensorboard dev upload --logdir ./logs_for_LLAMA_65B
+# --name yjh
+# --description yjh
