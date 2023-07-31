@@ -40,6 +40,16 @@ deepspeed --include localhost:0,1,2,3,4,5,6,7,8 finaltest_trainer_eval.py
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python3 LLAMA_65B.py
 ```
+### GPT_Neox.py
+```bash
+CUDA_VISIBLE_DEVICES=0 python3 GPT_Neox.py
+```
+GPT_Neox can only be run by using 1 GPU, reason unknown.
+### Flan_T5.py
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2 python3 Flan_T5.py
+```
+T5-flan-base can only be run by using fewer than 3 GPUs, reason unknown.
 ### Input Examples
 ```text
 What is the average enrollment of schools?
