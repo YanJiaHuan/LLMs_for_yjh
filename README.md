@@ -55,3 +55,5 @@ Expected Output:
 ```sql
 SELECT avg(Enrollment) FROM school
 ```
+### Notice:
+1. As the original paramter size for each model varies, better use larger when training smaller models, and smaller when training larger models.  
