@@ -1,5 +1,6 @@
 # Introduction
-This a self-built repo to reproduce the fine-tuning of some Large Language Models (LLM) based on certain training frameworks like DeepSpeed, bitsandbytes, and QLora.
+This a self-built repo to reproduce the fine-tuning of some Large Language Models (LLM) based on certain training frameworks like DeepSpeed, bitsandbytes, and QLora. This project is
+currently servered as a personal-trial to test the feasibility of training large models based on QLoRA.
 
 ## Hardware
 NVIDIA-SMI 510.108.03   
