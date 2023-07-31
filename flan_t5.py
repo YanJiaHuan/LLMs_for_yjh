@@ -315,8 +315,8 @@ trainer = transformers.Seq2SeqTrainer(
         logging_steps=10,           # Set X to be 100
         output_dir="./Checkpoints/T5_flan_base/Spider",
         num_train_epochs=5,
-        per_device_train_batch_size=36,
-        per_device_eval_batch_size=32,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=128,
         gradient_accumulation_steps=4,
         gradient_checkpointing=True,
         warmup_ratio=0.03,
@@ -343,7 +343,7 @@ trainer.train()
 
 
 
-# CUDA_VISIBLE_DEVICES=0,1,2,3 python3 flan_t5.py
+# CUDA_VISIBLE_DEVICES=0,1,2 python3 flan_t5.py
 # deepspeed --num_gpus 8 LLAMA_65B.py
 # CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  python -m torch.distributed.launch LLAMA_65B.py
 # torchrun --nproc_per_node 8 LLAMA_65B.py
