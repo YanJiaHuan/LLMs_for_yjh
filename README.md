@@ -57,3 +57,4 @@ SELECT avg(Enrollment) FROM school
 ```
 ### Notice:
 1. As the original paramter size for each model varies, better use larger when training smaller models, and smaller when training larger models.  
+2. So far, the model I have tried can be trained smoothly, but the performance is terrible, I don't know whether the problem is out of training or out of this Qlora method.
