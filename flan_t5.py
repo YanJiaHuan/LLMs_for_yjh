@@ -239,14 +239,14 @@ def compute_metric(eval_pred):
     # preds = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
     preds = eval_pred.predictions
     labels = eval_pred.label_ids
-    inputs = eval_pred.inputs
+    # inputs = eval_pred.inputs
     decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True,clean_up_tokenization_spaces=False)
     decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True,clean_up_tokenization_spaces=False)
-    decoded_inputs = tokenizer.batch_decode(inputs, skip_special_tokens=True,clean_up_tokenization_spaces=False)
-    db_id = []
-    for question in decoded_inputs:
-        result = re.search(r'db_id:(.+?)\n', question)
-        db_id.append(result.group(1).strip())
+    # decoded_inputs = tokenizer.batch_decode(inputs, skip_special_tokens=True,clean_up_tokenization_spaces=False)
+    # db_id = []
+    # for question in decoded_inputs:
+    #     result = re.search(r'db_id:(.+?)\n', question)
+    #     db_id.append(result.group(1).strip())
     genetrated_queries = ["\n".join(nltk.sent_tokenize(pred.strip())) for pred in decoded_preds]  ###########
     gold_queries_and_db_ids = []
     with open(gold_file, 'r') as file:
@@ -316,7 +316,7 @@ trainer = transformers.Seq2SeqTrainer(
         logging_strategy='steps',   # Log after every X steps
         logging_steps=10,           # Set X to be 100
         output_dir="./Checkpoints/T5_flan_base/Spider",
-        num_train_epochs=5,
+        num_train_epochs=10,
         per_device_train_batch_size=32,
         per_device_eval_batch_size=32,
         gradient_accumulation_steps=4,
@@ -326,7 +326,7 @@ trainer = transformers.Seq2SeqTrainer(
         lr_scheduler_type="cosine",
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
-        eval_steps=1,
+        eval_steps=50,
         save_steps=100,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
         learning_rate=5e-4,
         fp16=False,
