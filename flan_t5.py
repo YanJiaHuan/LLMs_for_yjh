@@ -92,7 +92,7 @@ model.print_trainable_parameters()
 
 #### load data ####
 path_to_Spider = "./Data/spider"
-Output_path = "./Outputs/Spider"
+Output_path = "./Outputs/spider"
 DATASET_SCHEMA = path_to_Spider + "/tables.json"
 DATASET_TRAIN = path_to_Spider + "/train_spider.json"
 DATASET_DEV = path_to_Spider + "/dev.json"
@@ -234,8 +234,10 @@ eval_dataset = dataset_eval.map(lambda e: preprocess_function(e, tokenizer), bat
 
 #### Custom metric ####
 def compute_metric(eval_pred):
-    predictions = eval_pred.predictions
-    preds = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
+    print("Starting evaluation...\n")
+    # predictions = eval_pred.predictions
+    # preds = np.where(predictions != -100, predictions, tokenizer.pad_token_id)
+    preds = eval_pred.predictions
     labels = eval_pred.label_ids
     inputs = eval_pred.inputs
     decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True,clean_up_tokenization_spaces=False)
@@ -315,8 +317,8 @@ trainer = transformers.Seq2SeqTrainer(
         logging_steps=10,           # Set X to be 100
         output_dir="./Checkpoints/T5_flan_base/Spider",
         num_train_epochs=5,
-        per_device_train_batch_size=128,
-        per_device_eval_batch_size=128,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=32,
         gradient_accumulation_steps=4,
         gradient_checkpointing=True,
         warmup_ratio=0.03,
@@ -324,7 +326,7 @@ trainer = transformers.Seq2SeqTrainer(
         lr_scheduler_type="cosine",
         evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
         save_strategy="steps",
-        eval_steps=50,
+        eval_steps=1,
         save_steps=100,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
         learning_rate=5e-4,
         fp16=False,
@@ -336,14 +338,14 @@ trainer = transformers.Seq2SeqTrainer(
         # deepspeed=ds_config,
     ),
 )
-model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
+model.config.use_cache = True  # silence the warnings. Please re-enable for inference!
 trainer.train()
 
 
 
 
 
-# CUDA_VISIBLE_DEVICES=0,1,2 python3 flan_t5.py
+# CUDA_VISIBLE_DEVICES=0 python3 flan_t5.py
 # deepspeed --num_gpus 8 LLAMA_65B.py
 # CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  python -m torch.distributed.launch LLAMA_65B.py
 # torchrun --nproc_per_node 8 LLAMA_65B.py
