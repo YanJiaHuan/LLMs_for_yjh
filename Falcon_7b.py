@@ -49,6 +49,8 @@ model.print_trainable_parameters()
 # load data
 Data_path = "./Data/1890/background_train.json"
 data = pd.read_json(Data_path, lines=True)
-print(data.head())
-
+train = data.sample(frac=0.8,random_state=200)
+test = data.drop(train.index)
+print(train.shape)
+print(test.shape)
 # CUDA_VISIBLE_DEVICES=0 python3 Falcon_7b.py
