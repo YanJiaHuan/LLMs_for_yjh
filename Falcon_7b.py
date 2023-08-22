@@ -14,7 +14,7 @@ from peft import (
     LoraConfig,
     get_peft_model
 )
-
+from datasets import Dataset
 # model_name
 model_id = "tiiuae/falcon-7b"
 
@@ -50,13 +50,11 @@ model.print_trainable_parameters()
 
 # load data
 Data_path = "./Data/1890/background_train.json"
-data = pd.read_json(Data_path, lines=True)
-train = data.sample(frac=0.8,random_state=200)
-test = data.drop(train.index)
-print(train.shape)
-print(test.shape)
-
-# data preprocessing
+data = pd.read_json(Data_path, orient='records')
+train_dataset = data.sample(frac = 0.8, random_state=42)
+test_dataset = data.drop(train_dataset.index).reset_index(drop=True)
+train_dataset = Dataset.from_pandas(train_dataset)
+test_dataset = Dataset.from_pandas(test_dataset)
 def preprocess_function(example, tokenizer):
     instruction = example['instruction']
     input_text = example['input']
@@ -78,8 +76,8 @@ def preprocess_function(example, tokenizer):
         "labels": tokenized_output.squeeze(0)  # Remove batch dimension
     }
 
-train_dataset = train.map(lambda e: preprocess_function(e, tokenizer), batched=True)
-test_dataset = test.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+train_dataset = train_dataset.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+test_dataset = train_dataset.map(lambda e: preprocess_function(e, tokenizer), batched=True)
 
 # train
 
