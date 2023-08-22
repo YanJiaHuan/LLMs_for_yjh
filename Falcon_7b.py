@@ -46,5 +46,7 @@ model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 
 
+# load data
+
 
 # CUDA_VISIBLE_DEVICES=0 python3 Falcon_7b.py
