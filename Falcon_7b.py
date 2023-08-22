@@ -5,7 +5,9 @@ import transformers
 from transformers import(
     AutoTokenizer,
     AutoModelForCausalLM,
-    BitsAndBytesConfig
+    BitsAndBytesConfig,
+    Seq2SeqTrainingArguments,
+    Seq2SeqTrainer,
 )
 from peft import (
     prepare_model_for_kbit_training,
@@ -39,7 +41,7 @@ tokenizer = AutoTokenizer.from_pretrained(
     padding_side="right",
     use_fast=False,
 )
-model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map=device)
+model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=nf4_config, device_map=device, trust_remote_code=True)
 model.gradient_checkpointing_enable()
 model = prepare_model_for_kbit_training(model)
 model = get_peft_model(model, lora_config)
@@ -53,4 +55,67 @@ train = data.sample(frac=0.8,random_state=200)
 test = data.drop(train.index)
 print(train.shape)
 print(test.shape)
+
+# data preprocessing
+def preprocess_function(example, tokenizer):
+    instruction = example['instruction']
+    input_text = example['input']
+    output_text = example['output']
+
+    # Concatenate instruction and input with special tokens for separation
+    instruction_str = f"Instruction: {instruction}"
+    input_str = f"Context: {input_text}"
+
+    # Tokenize the concatenated string
+    tokenized_input = tokenizer(instruction_str + " " + input_str, return_tensors="pt", padding=True, truncation=True)
+
+    # Tokenize the output string
+    tokenized_output = tokenizer(output_text, return_tensors="pt", padding=True, truncation=True)["input_ids"]
+
+    return {
+        "input_ids": tokenized_input["input_ids"].squeeze(0),  # Remove batch dimension
+        "attention_mask": tokenized_input["attention_mask"].squeeze(0),  # Remove batch dimension
+        "labels": tokenized_output.squeeze(0)  # Remove batch dimension
+    }
+
+train_dataset = train.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+test_dataset = test.map(lambda e: preprocess_function(e, tokenizer), batched=True)
+
+# train
+
+trainer = transformers.Seq2SeqTrainer(
+    model=model,
+    train_dataset=train_dataset,
+    eval_dataset=test_dataset,
+    args=transformers.Seq2SeqTrainingArguments(
+        logging_dir="./logs_for_falcon_7b" ,     # Path to directory to save logs
+        logging_strategy='steps',   # Log after every X steps
+        logging_steps=10,           # Set X to be 100
+        output_dir="./Checkpoints/falcon/1890",
+        num_train_epochs=10,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=32,
+        gradient_accumulation_steps=4,
+        gradient_checkpointing=True,
+        warmup_ratio=0.03,
+        group_by_length=False,
+        lr_scheduler_type="cosine",
+        evaluation_strategy="steps",  # Change evaluation_strategy to "steps"
+        save_strategy="steps",
+        eval_steps=50,
+        save_steps=100,# Add eval_steps parameter need to lower the log/eval/save steps to see the report results
+        learning_rate=5e-4,
+        fp16=False,
+        optim="paged_adamw_8bit",
+        predict_with_generate=True,
+        generation_num_beams=4,
+        generation_max_length=513,
+        include_inputs_for_metrics=True,
+        # deepspeed=ds_config,
+    ),
+)
+model.config.use_cache = True  # silence the warnings. Please re-enable for inference!
+trainer.train()
+
+
 # CUDA_VISIBLE_DEVICES=0 python3 Falcon_7b.py
