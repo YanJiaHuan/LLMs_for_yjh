@@ -50,7 +50,7 @@ model.print_trainable_parameters()
 
 # load data
 Data_path = "./Data/1890/background_train.json"
-data = pd.read_json(Data_path, orient='records')
+data = pd.read_json(Data_path, lines=True)
 train_dataset = data.sample(frac = 0.8, random_state=42)
 test_dataset = data.drop(train_dataset.index).reset_index(drop=True)
 train_dataset = Dataset.from_pandas(train_dataset)
