@@ -115,4 +115,4 @@ model.config.use_cache = False  # silence the warnings. Please re-enable for inf
 trainer.train()
 
 
-# CUDA_VISIBLE_DEVICES=0 python3 Falcon_7b.py
+# CUDA_VISIBLE_DEVICES=7 python3 Falcon_7b.py
